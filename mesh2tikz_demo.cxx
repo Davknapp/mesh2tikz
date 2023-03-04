@@ -39,7 +39,7 @@ main (int argc, char **argv)
   /* We will use MPI_COMM_WORLD as a communicator. */
   comm = sc_MPI_COMM_WORLD;
 
-  cmesh = t8_cmesh_new_hypercube (T8_ECLASS_QUAD, comm, 0, 0, 0);
+  cmesh = t8_cmesh_new_hypercube (T8_ECLASS_TET, comm, 0, 0, 0);
 
   forest =
     t8_forest_new_uniform (cmesh, t8_scheme_new_default_cxx (), level, 0,

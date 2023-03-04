@@ -3,6 +3,7 @@
 #include <t8.h>
 #include <t8_element_cxx.hxx>
 #include <t8_vec.h>
+#include <t8_eclass.h>
 
 /**
  * Enum for clipping purpose. 
@@ -47,10 +48,12 @@ const int t8_to_tikz[2][4] = {{0,1,3,2},
                               {0,1,2, -1}};
 
 /**
- * Write a single triangle in a tikz-file.
+ * Write a single 2 dimensional element in a tikz-file.
  * 
- * \param[in] file  The file where the triangle should be written to.
- * \param[in] coords  The coordinates of each vertex of the triangle.
+ * \param[in] file  The file where the element should be written to.
+ * \param[in] coords  The coordinates of each vertex of the 2D-element.
+ * \param[in] num_vertex  The number of vertices of the element
+ * \param[in] shape  The shape of the element
  * \return    0, if writing was successfull. -1 otherwise.
  */
 static int
@@ -75,6 +78,41 @@ write_2D (FILE *file, double **coords, const int num_vertex, const t8_element_sh
     return -1;
   }
   return 0;
+}
+
+/**
+ * Write a single 2 dimensional element in a tikz-file.
+ * 
+ * \param[in] file  The file where the element should be written to.
+ * \param[in] coords  The coordinates of each vertex of the 2D-element.
+ * \param[in] num_faces  The number of vertices of the element
+ * \param[in] shape  The shape of the element
+ * \return    0, if writing was successfull. -1 otherwise.
+ */
+static int
+write_3D (FILE *file, double **coords, t8_eclass_scheme_c *ts,
+          const t8_element_t *element)
+{
+  const int num_faces = ts->t8_element_num_faces(element);
+  double **face_coords = T8_ALLOC(double *, 4);
+  for(int i = 0; i < 4; i++){
+    face_coords[i] = T8_ALLOC_ZERO(double, 3);
+  }
+  for(int iface = 0; iface < num_faces; iface++){
+    const t8_element_shape_t face_shape = ts->t8_element_face_shape(element, iface);
+    const int num_vertices = t8_eclass_num_vertices[face_shape];
+    for(int ivertex = 0; ivertex < num_vertices; ivertex++){
+      const int elem_to_face_vertex = ts->t8_element_get_face_corner(element, iface, ivertex);
+      face_coords[ivertex][0] = coords[elem_to_face_vertex][0];
+      face_coords[ivertex][1] = coords[elem_to_face_vertex][1];
+      face_coords[ivertex][2] = coords[elem_to_face_vertex][2];
+    }
+    write_2D(file, face_coords, num_vertices, face_shape);
+  }
+  for(int i = 3; i >= 0; i--){
+    T8_FREE(face_coords[i]);
+  }
+  T8_FREE(face_coords);
 }
 
 /**
@@ -110,26 +148,20 @@ write_element (t8_forest_t forest, t8_eclass_scheme_c *ts,
   }
   /* Write the transformed triangle. */
   const t8_element_shape_t  shape = ts->t8_element_shape (element);
-  if (shape == T8_ECLASS_QUAD || shape == T8_ECLASS_TRIANGLE) {
-    const int           write_return = write_2D (file, vertex_coords, num_vertex, shape);
-    for (int i = num_vertex - 1; i >= 0; i--) {
-      T8_FREE (vertex_coords[i]);
-    }
-    T8_FREE (vertex_coords);
-    if (write_return) {
-      t8_errorf ("Error writing cell\n");
-      return;
-    }
+  int write_return;
+  if (t8_eclass_to_dimension[shape] == 2) {
+    write_return = write_2D (file, vertex_coords, num_vertex, shape);
   }
-  else {
-    t8_errorf ("Tikz-support only for Triangles");
-    if (file != NULL) {
-      for (int i = num_vertex - 1; i >= 0; i--) {
-        T8_FREE (vertex_coords[i]);
-      }
-      T8_FREE (vertex_coords);
-      fclose (file);
-    }
+  else{
+    write_return = write_3D(file, vertex_coords, ts, element);
+  }
+  for (int i = num_vertex - 1; i >= 0; i--) {
+    T8_FREE (vertex_coords[i]);
+  }
+  T8_FREE (vertex_coords);
+  if (write_return) {
+    t8_errorf ("Error writing cell\n");
+    fclose(file);
     return;
   }
 }
