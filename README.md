@@ -23,6 +23,19 @@ You can setup your AMR-pipeline and use 'mesh2tikz' to transform your mesh into 
 To write a `tikz` file `mesh2tikz`gets a commited forest and a fileprefix to define where the output should be written. 
 The size of the output-graphic is defined via `screen_width` and `screen_height`. The position and the direction of the camera are defined using
 `cam` and `focus`. `up` defines which direction referes to the y-direction of the camera coordinates. The view-volume is defined by `view_width` and `view_height`, defining a plane at the focus-point orthogonal to the view-direction. The depth of the frustom is defined by `far`. 
+|Parameter |Explanation|
+|----------|-----------|
+|forest          | A commited forest.|
+|fileprefix      |A filename, where the tikz-file should be created|
+|screen_width    |The width of the output-screen.|
+|screen_height   |The height of the output-screen.|
+|cam             |The position of the camera.|
+|focus           |The point the camera is facing.|
+|up              |The up-direction of the camera. |
+|view_width      |The width of the frontal view-plane orthogonal to the view-direction, defining the view-volume.|
+|view_height     |The height of the frontal view-plane orthogonal to the view-direction, defining the view-volume.|
+|far             |The distance between the camera and the back of the view-volume. |
+|write_sfc       |If set to 1, a line jumping from center to center of each element along the space-filling curve is drawn |
 
 After calling the elements in the view-volume are transformed using a perspective-projection onto the screen defined by 'screen_width' and 'screen_height'. Eventually, the 'tikz'-file can be included in your latex-document. 
 
