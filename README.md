@@ -19,7 +19,7 @@ The following steps will build 'mesh2tikz' on a linux enviroment:
 4. `make`
 
 # How to use it?
-You can setup your AMR-pipeline and use 'mesh2tikz' to transform your mesh into a tikz file. An example can be found in `mesh2tikz_demo`.
+You can setup your AMR-pipeline and use `mesh2tikz` to transform your mesh into a tikz file. An example can be found in `mesh2tikz_demo`.
 To write a `tikz` file `mesh2tikz`gets a commited forest and a fileprefix to define where the output should be written. 
 The size of the output-graphic is defined via `screen_width` and `screen_height`. The position and the direction of the camera are defined using
 `cam` and `focus`. `up` defines which direction referes to the y-direction of the camera coordinates. The view-volume is defined by `view_width` and `view_height`, defining a plane at the focus-point orthogonal to the view-direction. The depth of the frustom is defined by `far`. 
