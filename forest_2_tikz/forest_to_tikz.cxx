@@ -43,6 +43,9 @@ check_write_success (FILE *file, int freturn)
   }
 }
 
+const int t8_to_tikz[2][4] = {{0,1,3,2},
+                              {0,1,2, -1}};
+
 /**
  * Write a single triangle in a tikz-file.
  * 
@@ -50,21 +53,28 @@ check_write_success (FILE *file, int freturn)
  * \param[in] coords  The coordinates of each vertex of the triangle.
  * \return    0, if writing was successfull. -1 otherwise.
  */
-int
-write_triangle (FILE *file, double **coords)
+static int
+write_2D (FILE *file, double **coords, const int num_vertex, const t8_element_shape_t  shape)
 {
-  int                 freturn = fprintf (file,
-                                         "\\draw (%3.3f, %3.3f) -- (%3.3f, %3.3f) -- (%3.3f, %3.3f) -- cycle;\n",
-                                         coords[0][0], coords[0][1],
-                                         coords[1][0], coords[1][1],
-                                         coords[2][0], coords[2][1]);
+  int freturn = fprintf (file, "\\draw ");
   if (!check_write_success (file, freturn)) {
-    t8_errorf ("Error writing triangle\n");
+    t8_errorf ("Error writing 2D-element\n");
     return -1;
   }
-  else {
-    return 0;
+  for(int ivertex = 0; ivertex < num_vertex; ivertex++){
+    const int tikz_corner = t8_to_tikz[(int) shape - T8_ECLASS_QUAD][ivertex];
+    freturn = fprintf (file, "(%3.3f, %3.3f) -- ", coords[tikz_corner][0], coords[tikz_corner][1]);
+    if (!check_write_success (file, freturn)) {
+      t8_errorf ("Error writing 2D-element\n");
+      return -1;
+    }
   }
+  freturn = fprintf(file, "cycle;\n");
+  if (!check_write_success (file, freturn)) {
+    t8_errorf ("Error writing 2D-element\n");
+    return -1;
+  }
+  return 0;
 }
 
 /**
@@ -99,9 +109,9 @@ write_element (t8_forest_t forest, t8_eclass_scheme_c *ts,
     t8_mat_vec (screen, perspective_coord, 1.0, vertex_coords[i]);
   }
   /* Write the transformed triangle. */
-  t8_element_shape_t  shape = ts->t8_element_shape (element);
-  if (shape == T8_ECLASS_TRIANGLE) {
-    const int           write_return = write_triangle (file, vertex_coords);
+  const t8_element_shape_t  shape = ts->t8_element_shape (element);
+  if (shape == T8_ECLASS_QUAD || shape == T8_ECLASS_TRIANGLE) {
+    const int           write_return = write_2D (file, vertex_coords, num_vertex, shape);
     for (int i = num_vertex - 1; i >= 0; i--) {
       T8_FREE (vertex_coords[i]);
     }
