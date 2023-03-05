@@ -37,7 +37,13 @@ main (int argc, char **argv)
   const double        view_width = 2.0;
   const double        view_height = 2.0;
   const double        far = 2.0;
-  const int           write_sfc = 0;
+  const int           write_sfc = 1;
+  const int           color_mpi = 1;
+  int                 **mpi_colors = T8_ALLOC(int *, 3);
+  for(int i = 0; i < 3; i++){
+    mpi_colors[i] = T8_ALLOC_ZERO(int, 3);
+    mpi_colors[i][i] = 255;
+  }
 
   /* Initialize the sc library, has to happen before we initialize t8code. */
   sc_init (sc_MPI_COMM_WORLD, 1, 1, NULL, SC_LP_ESSENTIAL);
@@ -54,10 +60,17 @@ main (int argc, char **argv)
                            comm);
 
   mesh2tikz (forest, tikz_name, screen_width, screen_height, cam,
-                        focus, up, view_width, view_height, far, write_sfc);
+                        focus, up, view_width, view_height, far, write_sfc, color_mpi, mpi_colors);
   t8_forest_write_vtk (forest, "tikz_compare");
+  
+  for(int i = 2; i >= 0; i--){
+    T8_FREE(mpi_colors[i]);
+  }
+  T8_FREE(mpi_colors);
+  
   t8_forest_unref (&forest);
   sc_finalize ();
+
   mpiret = sc_MPI_Finalize ();
   SC_CHECK_MPI (mpiret);
   return 0;

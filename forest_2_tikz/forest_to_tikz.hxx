@@ -26,6 +26,9 @@
   * \param[in] view_width       The width of the frontal view-plane orthogonal to the view-direction, defining the view-volume.
   * \param[in] view_height      The height of the frontal view-plane orthogonal to the view-direction, defining the view-volume.
   * \param[in] far              The distance between the camera and the back of the view-volume. 
+  * \param[in] write_sfc        A flag to decide if the SFC should be written
+  * \param[in] color_mpi        A flag to decide if the mpi_ranks should be colored.
+  * \param[in] rgb_colors       The colors of the mpi_ranks.
   */
 
 void                mesh2tikz (t8_forest_t forest,
@@ -38,5 +41,7 @@ void                mesh2tikz (t8_forest_t forest,
                                 const double view_width,
                                 const double view_height,
                                 const double far,
-                                const int write_sfc);
+                                const int write_sfc,
+                                const int color_mpi, 
+                                int **rgb_colors);
 #endif /* FOREST_TO_TIKZ */

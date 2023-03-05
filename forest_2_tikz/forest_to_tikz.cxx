@@ -91,26 +91,39 @@ const int t8_to_tikz[2][4] = {{0,1,3,2},
  * \return    0, if writing was successfull. -1 otherwise.
  */
 static int
-write_2D (MPI_File file, double **coords, const int num_vertex, const t8_element_shape_t  shape)
+write_2D (MPI_File file, double **coords, const int num_vertex, const t8_element_shape_t  shape, const int color_mpi,
+          const int mpirank)
 {
   /* We start be printing \\draw and then add points until we have a full circle */
+  char draw_buffer[BUFSIZ];
   char buffer[BUFSIZ];
   int freturn;
+  if(color_mpi){
+    freturn = snprintf(draw_buffer, BUFSIZ, "\\draw[fill=mpi_color_%04d!40]", mpirank);
+  }
+  else{
+    freturn = snprintf(draw_buffer, BUFSIZ, "\\draw ", mpirank);
+  }
   /* Iterate over all vertices and print the current coordinates. */
   if(num_vertex == 3){
-    freturn = snprintf (buffer, BUFSIZ, "\\draw (%03.3f, %03.3f) -- (%03.3f, %03.3f) -- (%03.3f, %03.3f) -- cycle;\n", 
+    freturn = snprintf (buffer, BUFSIZ, "%s (%03.3f, %03.3f) -- (%03.3f, %03.3f) -- (%03.3f, %03.3f) -- cycle;\n", draw_buffer,
               coords[0][0], coords[0][1],
               coords[1][0], coords[1][1],
               coords[2][0], coords[2][1]
               ); 
   }
   else if(num_vertex == 4){
-    freturn = snprintf (buffer, BUFSIZ, "\\draw (%03.3f, %03.3f) -- %03.3f, %03.3f) -- (%03.3f, %03.3f) -- (%03.3f, %03.3f) -- cycle;\n", 
+    freturn = snprintf (buffer, BUFSIZ, "%s (%03.3f, %03.3f) -- %03.3f, %03.3f) -- (%03.3f, %03.3f) -- (%03.3f, %03.3f) -- cycle;\n", draw_buffer,
               coords[0][0], coords[0][1],
               coords[1][0], coords[1][1],
               coords[2][0], coords[2][1],
               coords[3][0], coords[3][1]
               ); 
+  }
+  else{
+    MPI_File_close(&file);
+    t8_errorf("Only quadrilateral and triangular surfaces supported\n");
+    return -1;
   }
   if (!check_write_success (file, freturn)) {
       t8_errorf ("Error writing 2D-element\n");
@@ -134,7 +147,8 @@ write_2D (MPI_File file, double **coords, const int num_vertex, const t8_element
  */
 static int
 write_3D (MPI_File file, double **coords, t8_eclass_scheme_c *ts,
-          const t8_element_t *element)
+          const t8_element_t *element, const int color_mpi,
+          const int mpirank)
 {
   const int num_faces = ts->t8_element_max_num_faces(element);
   /* Currently there are only quad and tri-faces in t8code. */
@@ -154,7 +168,7 @@ write_3D (MPI_File file, double **coords, t8_eclass_scheme_c *ts,
       face_coords[ivertex][2] = coords[elem_to_face_vertex][2];
     }
     /* Actual writing of the face. */
-    int write_return = write_2D(file, face_coords, num_vertices, face_shape);
+    int write_return = write_2D(file, face_coords, num_vertices, face_shape, color_mpi, mpirank);
     if(write_return == -1){
       for(int i = 3; i >= 0; i--){
         T8_FREE(face_coords[i]);
@@ -186,7 +200,8 @@ void
 write_element (t8_forest_t forest, t8_eclass_scheme_c *ts,
                const t8_locidx_t ltree_id, const t8_element_t *element,
                MPI_File file, const double inv_cam[4][4],
-               const double perspective[4][4], const double screen[3][3])
+               const double perspective[4][4], const double screen[3][3], 
+               const int color_mpi, const int mpirank)
 {
   const int           num_vertex = ts->t8_element_num_corners (element);
   double            **vertex_coords = T8_ALLOC (double *, num_vertex);
@@ -205,10 +220,10 @@ write_element (t8_forest_t forest, t8_eclass_scheme_c *ts,
   const t8_element_shape_t  shape = ts->t8_element_shape (element);
   int write_return;
   if (t8_eclass_to_dimension[shape] == 2) {
-    write_return = write_2D (file, vertex_coords, num_vertex, shape);
+    write_return = write_2D (file, vertex_coords, num_vertex, shape, color_mpi, mpirank);
   }
   else{
-    write_return = write_3D(file, vertex_coords, ts, element);
+    write_return = write_3D(file, vertex_coords, ts, element, color_mpi, mpirank);
   }
   for (int i = num_vertex - 1; i >= 0; i--) {
     T8_FREE (vertex_coords[i]);
@@ -221,7 +236,7 @@ write_element (t8_forest_t forest, t8_eclass_scheme_c *ts,
 }
 
 /**
- * @brief 
+ * Write the SFC of the trees in the forest.
  * 
  * \param[in] file    A Filepointer to an open file
  * \param[in] old_centroid The centroid of the previous element. Arbitrary for the first element
@@ -262,7 +277,7 @@ centroid_sfc (MPI_File file, const double old_centroid[3],
     
   }
   if (!check_write_success (file, freturn)) {
-    t8_errorf ("Error writing triangle\n");
+    t8_errorf ("Error writing SFC\n");
     return 0;
   }
   else {
@@ -273,13 +288,48 @@ centroid_sfc (MPI_File file, const double old_centroid[3],
   }
 }
 
+static int
+construct_header(MPI_File file, const int color_mpi, int **rgb_colors, const int mpisize)
+{
+  char buffer[BUFSIZ]; 
+  int char_return;
+  int mpiret;
+  if(color_mpi){
+    T8_ASSERT(rgb_colors != NULL);
+    for(int i = 0; i < mpisize; i++){
+      char_return = snprintf(buffer, BUFSIZ, "\\definecolor{mpi_color_%04d}{RGB}{%i, %i, %i}\n",
+                      i, rgb_colors[i][0], rgb_colors[i][1], rgb_colors[i][2]);
+      if(!check_write_success(file, char_return)){
+        t8_errorf("Error constructing header\n");
+        return -1;
+      }
+      mpiret = MPI_File_write_shared(file, &buffer, strlen(buffer),MPI_CHAR, MPI_STATUS_IGNORE);
+      if(!check_mpi_write_success(file, mpiret)){
+      t8_errorf("Error constructing header\n");
+      return -1;
+  }
+    }
+  }
+  char_return = snprintf(buffer, BUFSIZ, "\\begin{tikzpicture}\n");
+  if(!check_write_success(file, char_return)){
+    t8_errorf("Error constructing header\n");
+    return -1;
+  }
+  mpiret = MPI_File_write_shared(file, &buffer, strlen(buffer),MPI_CHAR, MPI_STATUS_IGNORE);
+  if(!check_mpi_write_success(file, mpiret)){
+    t8_errorf("Error constructing header\n");
+    return -1;
+  } 
+  return 0;
+}
+
 void
 mesh2tikz (t8_forest_t forest, const char *fileprefix,
                       const double screen_width, const double screen_height,
                       const double cam[3], const double focus[3],
                       const double up[3], const double view_width,
                       const double view_height, const double far,
-                      const int write_sfc)
+                      const int write_sfc, const int color_mpi, int **rgb_colors)
 {
   T8_ASSERT (forest != NULL);
   T8_ASSERT (t8_forest_is_committed (forest));
@@ -307,8 +357,7 @@ mesh2tikz (t8_forest_t forest, const char *fileprefix,
 
   int mpirank;
   mpiret = sc_MPI_Comm_rank(comm, &mpirank);
-
-  
+ 
   /* zero-initialize the transformation matrices */
   double              inv_cam[4][4] = { 0.0 };
   double              perspective[4][4] = { 0.0 };
@@ -334,17 +383,11 @@ mesh2tikz (t8_forest_t forest, const char *fileprefix,
 
   /* Write tikz-file header. */
   if(mpirank == 0){
-    char buffer[21] = "\\begin{tikzpicture}\n";
-    mpiret = MPI_File_write_shared(tikzfile, &buffer, strlen(buffer),MPI_CHAR, MPI_STATUS_IGNORE);
-    check_mpi_write_success(tikzfile, mpiret);
+    const int header_return = construct_header(tikzfile, color_mpi, rgb_colors, mpisize);
   }
   /* Ensure that the file-header is written before any other process writes.*/
   MPI_Barrier(comm);
   
-  /*freturn = fprintf (tikzfile, );
-  if (!check_write_success (tikzfile, freturn)) {
-    return;
-  }*/
   double              old_centroid[3] = { 0.0 };
 
   /* Iterate over all trees and all elements. Check for each element if it is
@@ -371,7 +414,7 @@ mesh2tikz (t8_forest_t forest, const char *fileprefix,
       if (clipping (perspective_centroid) == inside) {
         /* Actual cell writing. */
         write_element (forest, scheme, itree, element, tikzfile, inv_cam,
-                       perspective, screen);
+                       perspective, screen, color_mpi, mpirank);
         if (write_sfc) {
           centroid_sfc (tikzfile, old_centroid, perspective_centroid, itree,
                         ielem, screen);
@@ -383,7 +426,7 @@ mesh2tikz (t8_forest_t forest, const char *fileprefix,
       }
     }
   }
-  /* End the tikzpicture and close the file. */
+  /*Ensure that the end of the file is written after all processes have finished writing. */
   MPI_Barrier(comm);
   
   if(mpirank == 0){
