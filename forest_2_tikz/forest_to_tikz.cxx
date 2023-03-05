@@ -42,6 +42,7 @@ static int
 check_write_success (MPI_File file, int freturn)
 {
   if (freturn > BUFSIZ) {
+    t8_errorf("Error filling char\n");
     if (file != NULL) {
       MPI_File_close(&file);
     }
@@ -63,6 +64,7 @@ static int
 check_mpi_write_success (MPI_File file, int mpiret)
 {
   if (mpiret != MPI_SUCCESS) {
+    t8_errorf("Error writing mpi-file\n");
     if (file != NULL) {
       MPI_File_close(&file);
     }
@@ -95,7 +97,7 @@ write_2D (MPI_File file, double **coords, const int num_vertex, const t8_element
           const int mpirank)
 {
   /* We start be printing \\draw and then add points until we have a full circle */
-  char draw_buffer[BUFSIZ];
+  char draw_buffer[30];
   char buffer[BUFSIZ];
   int freturn;
   if(color_mpi){
@@ -441,4 +443,5 @@ mesh2tikz (t8_forest_t forest, const char *fileprefix,
   if (tikzfile != NULL) {
     MPI_File_close (&tikzfile);
   }
+  
 }

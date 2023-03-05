@@ -19,7 +19,7 @@ int
 main (int argc, char **argv)
 {
   int                 mpiret;
-  sc_MPI_Comm         comm;
+  sc_MPI_Comm         comm = sc_MPI_COMM_WORLD;
   t8_cmesh_t          cmesh;
   t8_forest_t         forest;
   int                 level = 2;
@@ -39,20 +39,19 @@ main (int argc, char **argv)
   const double        far = 2.0;
   const int           write_sfc = 1;
   const int           color_mpi = 1;
-  int                 **mpi_colors = T8_ALLOC(int *, 3);
-  for(int i = 0; i < 3; i++){
-    mpi_colors[i] = T8_ALLOC_ZERO(int, 3);
-    mpi_colors[i][i] = 255;
-  }
-
+  int                 **mpi_colors = (int **)malloc(3*sizeof(int *));
+  T8_ASSERT(mpi_colors != NULL);
   /* Initialize the sc library, has to happen before we initialize t8code. */
-  sc_init (sc_MPI_COMM_WORLD, 1, 1, NULL, SC_LP_ESSENTIAL);
+  sc_init (comm, 1, 1, NULL, SC_LP_ESSENTIAL);
   /* Initialize t8code with log level SC_LP_PRODUCTION. See sc.h for more info on the log levels. */
   t8_init (SC_LP_DEBUG);
 
-  /* We will use MPI_COMM_WORLD as a communicator. */
-  comm = sc_MPI_COMM_WORLD;
-
+  for(int i = 0; i < 3; i++){
+    mpi_colors[i] = (int *)malloc(3*sizeof(int));
+    for(int j = 0; j < 3; j++){
+      mpi_colors[i][j] = (i == j) ? 255: 0;
+    }
+  }
   cmesh = t8_cmesh_new_hypercube (T8_ECLASS_TRIANGLE, comm, 0, 0, 0);
 
   forest =
@@ -64,9 +63,9 @@ main (int argc, char **argv)
   t8_forest_write_vtk (forest, "tikz_compare");
   
   for(int i = 2; i >= 0; i--){
-    T8_FREE(mpi_colors[i]);
+    free(mpi_colors[i]);
   }
-  T8_FREE(mpi_colors);
+  free(mpi_colors);
   
   t8_forest_unref (&forest);
   sc_finalize ();
