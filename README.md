@@ -38,6 +38,7 @@ The size of the output-graphic is defined via `screen_width` and `screen_height`
 |write_sfc       |If set to 1, a line jumping from center to center of each element along the space-filling curve is drawn |
 |color_mpi       |If set to 1 colorize the different processes.|
 |mpi_colors      |The colors to use for the mpi_processes| 
+
 After calling the elements in the view-volume are transformed using a perspective-projection onto the screen defined by `screen_width` and `screen_height`. Eventually, the `tikz`-file can be included in your latex-document. 
 
 # Citing
