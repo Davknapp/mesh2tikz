@@ -1,11 +1,11 @@
 # mesh2tikz
-![mesh2tikz](https://user-images.githubusercontent.com/26361975/222916366-ef66137d-6725-4c0d-b628-2686c55e765f.png)
+![parralel_mesh2tikz](https://user-images.githubusercontent.com/26361975/222976094-b82733cb-662c-4ee4-b943-f0d5d6877781.png)
 
 `mesh2tikz` is a library to convert meshes of the [tcode](https://github.com/DLR-AMR/t8code) library into `tikz` format. It takes a mesh, a camera-position and a view-volume as an input and transfers the elements of the mesh that lay in the view-volume into a `.tikz` file. 
 
 # The purpose of the library
 [tcode](https://github.com/DLR-AMR/t8code) is known for its parallel capabilities and its support for extremely large meshes. At first, it seems to be unpractical to transfrom a mesh into a `tikz`-file. 
-This library is meant to support you to visualize concepts used in t8code for any of your publications. As [tcode](https://github.com/DLR-AMR/t8code) keeps on evolving and new features are published this library can visualize these additions on smaller meshes. 
+This library is meant to support you to visualize concepts used in t8code for any of your publications. As [tcode](https://github.com/DLR-AMR/t8code) keeps on evolving and new features are published this library can visualize these additions on smaller meshes. Even though it is possible to write meshes that were constructed in parallel it is not recommended to use this feature for many processes.
 
 # How to setup?
 Before starting, you should ensure that t8code, [p4est](https://github.com/cburstedde/p4est) and [sc](https://github.com/cburstedde/libsc) are installed. p4est and sc should come with an installation of t8code. The installation of `mesh2tikz` is very similar to [png2mesh](https://github.com/DLR-AMR/png2mesh) and if you have already installed it, you can probably skip the setup of the enviroment variables. If not, the following enviroment variables must be set:
@@ -36,7 +36,8 @@ The size of the output-graphic is defined via `screen_width` and `screen_height`
 |view_height     |The height of the frontal view-plane orthogonal to the view-direction, defining the view-volume.|
 |far             |The distance between the camera and the back of the view-volume. |
 |write_sfc       |If set to 1, a line jumping from center to center of each element along the space-filling curve is drawn |
-
+|color_mpi       |If set to 1 colorize the different processes.|
+|mpi_colors      |The colors to use for the mpi_processes| 
 After calling the elements in the view-volume are transformed using a perspective-projection onto the screen defined by `screen_width` and `screen_height`. Eventually, the `tikz`-file can be included in your latex-document. 
 
 # Citing
