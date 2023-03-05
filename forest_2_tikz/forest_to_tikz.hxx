@@ -29,14 +29,14 @@
   */
 
 void                mesh2tikz (t8_forest_t forest,
-                                          const char *fileprefix,
-                                          const double screen_width,
-                                          const double screen_height,
-                                          const double cam[3],
-                                          const double focus[3],
-                                          const double up[3],
-                                          const double view_width,
-                                          const double view_height,
-                                          const double far,
-                                          const int write_sfc);
+                                const char *fileprefix,
+                                const double screen_width,
+                                const double screen_height,
+                                const double cam[3],
+                                const double focus[3],
+                                const double up[3],
+                                const double view_width,
+                                const double view_height,
+                                const double far,
+                                const int write_sfc);
 #endif /* FOREST_TO_TIKZ */

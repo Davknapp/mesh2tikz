@@ -245,12 +245,12 @@ centroid_sfc (FILE *file, const double old_centroid[3],
 }
 
 void
-mesh2tikz (t8_forest_t forest, const char *fileprefix,
+mesh2tikz_ext (t8_forest_t forest, const char *fileprefix,
                       const double screen_width, const double screen_height,
                       const double cam[3], const double focus[3],
                       const double up[3], const double view_width,
                       const double view_height, const double far,
-                      const int write_sfc)
+                      const int write_sfc, const int parallel_write)
 {
   T8_ASSERT (forest != NULL);
   T8_ASSERT (t8_forest_is_committed (forest));
@@ -277,8 +277,8 @@ mesh2tikz (t8_forest_t forest, const char *fileprefix,
 
 
   /* This feature is not supposed to be executed on more than one process. */
-  if (mpisize > 1) {
-    t8_errorf ("Writing tikz-files is only support for serial usage.\n");
+  if (mpisize > 1 && !parallel_write) {
+    t8_errorf ("Trying to write in paralle write without activating parallel write.\n");
     return;
   }
   /* zero-initialize the transformation matrices */
@@ -361,4 +361,45 @@ mesh2tikz (t8_forest_t forest, const char *fileprefix,
   if (tikzfile != NULL) {
     fclose (tikzfile);
   }
+}
+
+void
+mesh2tikz(t8_forest_t forest, const char *fileprefix,
+                      const double screen_width, const double screen_height,
+                      const double cam[3], const double focus[3],
+                      const double up[3], const double view_width,
+                      const double view_height, const double far,
+                      const int write_sfc)
+{
+  T8_ASSERT (forest != NULL);
+  T8_ASSERT (t8_forest_is_committed (forest));
+  T8_ASSERT (fileprefix != NULL);
+
+  const double        near = t8_vec_dist (cam, focus);
+
+  T8_ASSERT (far > 0);
+  T8_ASSERT (near > 0);
+  T8_ASSERT (view_width > 0);
+  T8_ASSERT (view_height > 0);
+  T8_ASSERT (screen_width > 0);
+  T8_ASSERT (screen_height > 0);
+  T8_ASSERT (far - near > 0);
+  T8_ASSERT (t8_vec_dist (cam, focus) > 0);
+
+   sc_MPI_Comm comm = t8_forest_get_mpicomm (forest);
+  int mpisize;
+  int mpiret  = sc_MPI_Comm_size(comm, &mpisize);
+  SC_CHECK_MPI(mpiret);
+
+  int mpirank;
+  mpiret = sc_MPI_Comm_rank(comm, &mpirank);
+
+  if(mpisize == 1){
+    mesh2tikz_ext(forest, fileprefix, screen_width, screen_height, cam, focus,
+    up, view_width, view_height, far, write_sfc, 0);
+  }
+  else{
+    return;
+  }
+
 }
