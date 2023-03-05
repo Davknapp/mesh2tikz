@@ -307,11 +307,22 @@ construct_header(MPI_File file, const int color_mpi, int **rgb_colors, const int
       }
       mpiret = MPI_File_write_shared(file, &buffer, strlen(buffer),MPI_CHAR, MPI_STATUS_IGNORE);
       if(!check_mpi_write_success(file, mpiret)){
-      t8_errorf("Error constructing header\n");
+        t8_errorf("Error constructing header\n");
       return -1;
-  }
+      }
     }
   }
+  char_return = snprintf(buffer, BUFSIZ, "\\pgfdeclarelayer{background}\n\\pgfdeclarelayer{foreground}\n\\pgfsetlayers{background, main, foreground}\n");
+  if(!check_write_success(file, char_return)){
+    t8_errorf("Error constructing header\n");
+    return -1;
+  }
+  mpiret = MPI_File_write_shared(file, &buffer, strlen(buffer),MPI_CHAR, MPI_STATUS_IGNORE);
+  if(!check_mpi_write_success(file, mpiret)){
+    t8_errorf("Error constructing header\n");
+  return -1;
+  }
+
   char_return = snprintf(buffer, BUFSIZ, "\\begin{tikzpicture}\n");
   if(!check_write_success(file, char_return)){
     t8_errorf("Error constructing header\n");
@@ -323,6 +334,115 @@ construct_header(MPI_File file, const int color_mpi, int **rgb_colors, const int
     return -1;
   } 
   return 0;
+}
+
+static void
+layer_block(MPI_File file, const int mpirank, sc_MPI_Comm comm, char layer[BUFSIZ], int begin_end){
+  MPI_Barrier(comm);
+  if(mpirank == 0){
+    char buffer[BUFSIZ];
+    int char_return;
+    if(begin_end == 0){
+      char_return = snprintf(buffer, BUFSIZ, "\\begin{pgfonlayer}{%s}\n", layer);
+    }
+    else{ 
+      char_return = snprintf(buffer, BUFSIZ, "\\end{pgfonlayer}\n");
+    }
+    if(!check_write_success(file, char_return)){
+      t8_errorf("Error constructing header\n");
+      return;
+    }
+    int mpiret = MPI_File_write_shared(file, &buffer, strlen(buffer),MPI_CHAR, MPI_STATUS_IGNORE);
+    if(!check_mpi_write_success(file, mpiret)){
+      t8_errorf("Error constructing header\n");
+      return;
+    } 
+  }
+  MPI_Barrier(comm);
+}
+
+static void
+foreground_layer(t8_forest_t forest, MPI_File file,   double inv_cam[4][4],  double perspective[4][4],
+                   double screen[3][3], const int write_sfc, const int color_mpi, const int mpirank, sc_MPI_Comm comm)
+{
+  /* Iterate over all trees and all elements. Check for each element if it is
+   * inside the view-volume (inside the cube [-1,1]^2 after inverse camera and
+   * perspective transformation.) and write the cell if true. */
+  double              old_centroid[3] = { 0.0 };
+  char foreground[11] = "foreground";
+  layer_block(file, mpirank, comm, foreground, 0);
+  
+  
+  const t8_locidx_t   num_trees = t8_forest_get_num_local_trees (forest);
+  for (t8_locidx_t itree = 0; itree < num_trees; itree++) {
+    t8_eclass_scheme_c *scheme =
+      t8_forest_get_eclass_scheme (forest, t8_forest_get_tree_class (forest,
+                                                                     itree));
+    const t8_locidx_t   elems_in_tree =
+      t8_forest_get_tree_num_elements (forest, itree);
+    /* Iterate over all elements in the tree. */
+    for (t8_locidx_t ielem = 0; ielem < elems_in_tree; ielem++) {
+      const t8_element_t *element =
+        t8_forest_get_element_in_tree (forest, itree, ielem);
+      double              centroid[3];
+      /* Clipping is done with the center of an element. */
+      t8_forest_element_centroid (forest, itree, element, centroid);
+      double              cam_centroid[3];
+      double              perspective_centroid[3];
+      mat4d_vec_multi (inv_cam, centroid, cam_centroid);
+      mat4d_vec_multi (perspective, cam_centroid, perspective_centroid);
+      if (clipping (perspective_centroid) == inside) {
+        if (write_sfc) {
+          centroid_sfc (file, old_centroid, perspective_centroid, itree,
+                        ielem, screen);
+          old_centroid[0] = perspective_centroid[0];
+          old_centroid[1] = perspective_centroid[1];
+          old_centroid[2] = perspective_centroid[2];
+        }
+      }
+    }
+  }
+  layer_block(file, mpirank, comm, foreground, 1);
+}
+
+static int
+background_layer(t8_forest_t forest, MPI_File file,  double inv_cam[4][4], double perspective[4][4],
+                  double screen[3][3], const int color_mpi, const int mpirank, sc_MPI_Comm comm)
+{
+  /* Iterate over all trees and all elements. Check for each element if it is
+   * inside the view-volume (inside the cube [-1,1]^2 after inverse camera and
+   * perspective transformation.) and write the cell if true. */
+  char background[11] = "background";
+  layer_block(file, mpirank, comm, background, 0);
+  const t8_locidx_t   num_trees = t8_forest_get_num_local_trees (forest);
+  t8_locidx_t written_cells = 0;
+  for (t8_locidx_t itree = 0; itree < num_trees; itree++) {
+    t8_eclass_scheme_c *scheme =
+      t8_forest_get_eclass_scheme (forest, t8_forest_get_tree_class (forest,
+                                                                     itree));
+    const t8_locidx_t   elems_in_tree =
+      t8_forest_get_tree_num_elements (forest, itree);
+    /* Iterate over all elements in the tree. */
+    for (t8_locidx_t ielem = 0; ielem < elems_in_tree; ielem++) {
+      const t8_element_t *element =
+        t8_forest_get_element_in_tree (forest, itree, ielem);
+      double              centroid[3];
+      /* Clipping is done with the center of an element. */
+      t8_forest_element_centroid (forest, itree, element, centroid);
+      double              cam_centroid[3];
+      double              perspective_centroid[3];
+      mat4d_vec_multi (inv_cam, centroid, cam_centroid);
+      mat4d_vec_multi (perspective, cam_centroid, perspective_centroid);
+      if (clipping (perspective_centroid) == inside) {
+        /* Actual cell writing. */
+        write_element (forest, scheme, itree, element, file, inv_cam,
+                       perspective, screen, color_mpi, mpirank);
+        written_cells++;
+      }
+    }
+  }
+  layer_block(file, mpirank, comm, background, 1);
+  return written_cells;
 }
 
 void
@@ -364,7 +484,6 @@ mesh2tikz (t8_forest_t forest, const char *fileprefix,
   double              inv_cam[4][4] = { 0.0 };
   double              perspective[4][4] = { 0.0 };
   double              screen[3][3] = { 0.0 };
-  t8_gloidx_t         written_cells = 0;        /* Counter for cells in the view-volume */
 
   /* Compute the transformation matrices */
   inverse_camera_transformation (cam, focus, up, inv_cam);
@@ -388,49 +507,16 @@ mesh2tikz (t8_forest_t forest, const char *fileprefix,
     const int header_return = construct_header(tikzfile, color_mpi, rgb_colors, mpisize);
   }
   /* Ensure that the file-header is written before any other process writes.*/
-  MPI_Barrier(comm);
   
-  double              old_centroid[3] = { 0.0 };
+  /*Each layer handles its barries, therefore we don't need to orchestrate the process here. */
+  t8_locidx_t written_cells = background_layer(forest, tikzfile, inv_cam, perspective,screen, color_mpi, mpirank, comm);
+  
+  foreground_layer(forest, tikzfile, inv_cam, perspective, screen, write_sfc, color_mpi, mpirank, comm);
 
-  /* Iterate over all trees and all elements. Check for each element if it is
-   * inside the view-volume (inside the cube [-1,1]^2 after inverse camera and
-   * perspective transformation.) and write the cell if true. */
-  const t8_locidx_t   num_trees = t8_forest_get_num_local_trees (forest);
-  for (t8_locidx_t itree = 0; itree < num_trees; itree++) {
-    t8_eclass_scheme_c *scheme =
-      t8_forest_get_eclass_scheme (forest, t8_forest_get_tree_class (forest,
-                                                                     itree));
-    const t8_locidx_t   elems_in_tree =
-      t8_forest_get_tree_num_elements (forest, itree);
-    /* Iterate over all elements in the tree. */
-    for (t8_locidx_t ielem = 0; ielem < elems_in_tree; ielem++) {
-      const t8_element_t *element =
-        t8_forest_get_element_in_tree (forest, itree, ielem);
-      double              centroid[3];
-      /* Clipping is done with the center of an element. */
-      t8_forest_element_centroid (forest, itree, element, centroid);
-      double              cam_centroid[3];
-      double              perspective_centroid[3];
-      mat4d_vec_multi (inv_cam, centroid, cam_centroid);
-      mat4d_vec_multi (perspective, cam_centroid, perspective_centroid);
-      if (clipping (perspective_centroid) == inside) {
-        /* Actual cell writing. */
-        write_element (forest, scheme, itree, element, tikzfile, inv_cam,
-                       perspective, screen, color_mpi, mpirank);
-        if (write_sfc) {
-          centroid_sfc (tikzfile, old_centroid, perspective_centroid, itree,
-                        ielem, screen);
-          old_centroid[0] = perspective_centroid[0];
-          old_centroid[1] = perspective_centroid[1];
-          old_centroid[2] = perspective_centroid[2];
-        }
-        written_cells++;
-      }
-    }
-  }
-  /*Ensure that the end of the file is written after all processes have finished writing. */
-  MPI_Barrier(comm);
   
+  /*Ensure that the end of the file is written after all processes have finished writing. */
+
+  MPI_Barrier(comm);
   if(mpirank == 0){
     char close_buffer[BUFSIZ] = "\\end{tikzpicture}\n";
     mpiret = MPI_File_write_shared(tikzfile, &close_buffer, strlen(close_buffer),MPI_CHAR, MPI_STATUS_IGNORE);
