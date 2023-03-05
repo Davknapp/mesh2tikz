@@ -16,10 +16,11 @@ typedef enum inside_view
 } inside_view;
 
 /**
- * Check if all elements are inside the cube [0,1]^3
- * 
+ * Check if all elements are inside the cube [-1,1]^3
+ * \param[in] point a 3D vector
+ * \return outside if the point is outside of the cube, inside otherwise. 
  */
-inside_view
+static inside_view
 clipping (double point[3])
 {
   for (int i = 0; i < 3; i++) {
@@ -30,7 +31,14 @@ clipping (double point[3])
   return inside;
 }
 
-int
+/**
+ * Check if a write operation was successfull. 
+ * 
+ * \param[in] file A file pointer
+ * \param[in] freturn The return-value of an fprintf
+ * \return int 1 if the write was successfull, 0 otherwise. 
+ */
+static int
 check_write_success (FILE *file, int freturn)
 {
   if (freturn > BUFSIZ) {
@@ -44,6 +52,11 @@ check_write_success (FILE *file, int freturn)
   }
 }
 
+/**
+ * A helper look-up table to translate between the t8code-vertex order and
+ * the tikz-vertex order. 
+ * 
+ */
 const int t8_to_tikz[2][4] = {{0,1,3,2},
                               {0,1,2, -1}};
 
@@ -59,11 +72,13 @@ const int t8_to_tikz[2][4] = {{0,1,3,2},
 static int
 write_2D (FILE *file, double **coords, const int num_vertex, const t8_element_shape_t  shape)
 {
+  /* We start be printing \\draw and then add points until we have a full circle */
   int freturn = fprintf (file, "\\draw ");
   if (!check_write_success (file, freturn)) {
     t8_errorf ("Error writing 2D-element\n");
     return -1;
   }
+  /* Iterate over all vertices and print the current coordinates. */
   for(int ivertex = 0; ivertex < num_vertex; ivertex++){
     const int tikz_corner = t8_to_tikz[(int) shape - T8_ECLASS_QUAD][ivertex];
     freturn = fprintf (file, "(%3.3f, %3.3f) -- ", coords[tikz_corner][0], coords[tikz_corner][1]);
@@ -72,6 +87,7 @@ write_2D (FILE *file, double **coords, const int num_vertex, const t8_element_sh
       return -1;
     }
   }
+  /* Close the element. */
   freturn = fprintf(file, "cycle;\n");
   if (!check_write_success (file, freturn)) {
     t8_errorf ("Error writing 2D-element\n");
@@ -93,26 +109,38 @@ static int
 write_3D (FILE *file, double **coords, t8_eclass_scheme_c *ts,
           const t8_element_t *element)
 {
-  const int num_faces = ts->t8_element_num_faces(element);
+  const int num_faces = ts->t8_element_max_num_faces(element);
+  /* Currently there are only quad and tri-faces in t8code. */
   double **face_coords = T8_ALLOC(double *, 4);
   for(int i = 0; i < 4; i++){
     face_coords[i] = T8_ALLOC_ZERO(double, 3);
   }
+  /* Iterate over all faces of an element and write them. */
   for(int iface = 0; iface < num_faces; iface++){
     const t8_element_shape_t face_shape = ts->t8_element_face_shape(element, iface);
     const int num_vertices = t8_eclass_num_vertices[face_shape];
     for(int ivertex = 0; ivertex < num_vertices; ivertex++){
+      /* Get the coordinates of the vertices of the current face. */
       const int elem_to_face_vertex = ts->t8_element_get_face_corner(element, iface, ivertex);
       face_coords[ivertex][0] = coords[elem_to_face_vertex][0];
       face_coords[ivertex][1] = coords[elem_to_face_vertex][1];
       face_coords[ivertex][2] = coords[elem_to_face_vertex][2];
     }
-    write_2D(file, face_coords, num_vertices, face_shape);
+    /* Actual writing of the face. */
+    int write_return = write_2D(file, face_coords, num_vertices, face_shape);
+    if(write_return == -1){
+      for(int i = 3; i >= 0; i--){
+        T8_FREE(face_coords[i]);
+      }
+      T8_FREE(face_coords);
+      return -1;
+    }
   }
   for(int i = 3; i >= 0; i--){
     T8_FREE(face_coords[i]);
   }
   T8_FREE(face_coords);
+  return 0;
 }
 
 /**
@@ -166,29 +194,42 @@ write_element (t8_forest_t forest, t8_eclass_scheme_c *ts,
   }
 }
 
-int
+/**
+ * @brief 
+ * 
+ * \param[in] file    A Filepointer to an open file
+ * \param[in] old_centroid The centroid of the previous element. Arbitrary for the first element
+ * \param[in] centroid The centroid of the element with id \a elem_id
+ * \param[in] ltree_id The local tree-id of the element with id \a elem_id
+ * \param[in] elem_id The local element id of an element in \a ltree_id
+ * \param[in] screen The screen_projection matrix. 
+ * \return int 0 if writing was successfull, 1, if the very first element was put in, -1 ow. 
+ */
+static int
 centroid_sfc (FILE *file, const double old_centroid[3],
               const double centroid[3], t8_locidx_t ltree_id,
               t8_locidx_t elem_id, const double screen[3][3])
 {
-  /* Very first element */
   int                 freturn;
   double              screen_old[3] = { 0.0 };
   double              screen_new[3] = { 0.0 };
+  /* Project the centroids onto the the screen. */
   t8_mat_vec (screen, old_centroid, 1.0, screen_old);
   t8_mat_vec (screen, centroid, 1.0, screen_new);
-
   if (ltree_id == 0 && elem_id == 0) {
+    /* Very first element */
     return 1;
   }
-  /* First element in a new tree */
   else if (elem_id == 0) {
+    /* First element in a new tree. We use a dashed line to visualize a jump
+     * between trees. */
     freturn = fprintf (file,
                        "\\draw[red, dashed] (%3.3f, %3.3f) -- (%3.3f, %3.3f);\n",
                        screen_old[0], screen_old[1],
                        screen_new[0], screen_new[1]);
   }
   else {
+    /* Draw a red line between two elements. */
     freturn = fprintf (file,
                        "\\draw[red] (%3.3f, %3.3f) -- (%3.3f, %3.3f);\n",
                        screen_old[0], screen_old[1],

@@ -6,6 +6,14 @@
 #include <forest_2_tikz/forest_to_tikz.hxx>
 #include <t8_schemes/t8_default/t8_default_cxx.hxx>
 
+/*
+ * This file is demonstration on how to use mesh2tikz. 
+ * We construct a forest with a uniform refinement, set the camera, the view-volume
+ * and the screen. We also want to write the SFC of the forest. The result is written
+ * into the file "t8_tikz.tikz". If you want to compare the result you can have a
+ * look at the vtu-files "tikz_compare" in Paraview. 
+ */
+
 
 int
 main (int argc, char **argv)
@@ -44,12 +52,10 @@ main (int argc, char **argv)
   forest =
     t8_forest_new_uniform (cmesh, t8_scheme_new_default_cxx (), level, 0,
                            comm);
-  t8_productionf ("write tikz to %s\n", tikz_name);
 
   mesh2tikz (forest, tikz_name, screen_width, screen_height, cam,
                         focus, up, view_width, view_height, far, write_sfc);
   t8_forest_write_vtk (forest, "tikz_compare");
-  t8_productionf ("done writing\n");
   t8_forest_unref (&forest);
   sc_finalize ();
   mpiret = sc_MPI_Finalize ();
