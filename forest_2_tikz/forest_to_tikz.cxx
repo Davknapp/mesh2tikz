@@ -76,14 +76,6 @@ check_mpi_write_success (MPI_File file, int mpiret)
 }
 
 /**
- * A helper look-up table to translate between the t8code-vertex order and
- * the tikz-vertex order. 
- * 
- */
-const int t8_to_tikz[2][4] = {{0,1,3,2},
-                              {0,1,2, -1}};
-
-/**
  * Write a single 2 dimensional element in a tikz-file.
  * 
  * \param[in] file  The file where the element should be written to.
@@ -115,11 +107,11 @@ write_2D (MPI_File file, double **coords, const int num_vertex, const t8_element
               ); 
   }
   else if(num_vertex == 4){
-    freturn = snprintf (buffer, BUFSIZ, "%s (%03.3f, %03.3f) -- %03.3f, %03.3f) -- (%03.3f, %03.3f) -- (%03.3f, %03.3f) -- cycle;\n", draw_buffer,
+    freturn = snprintf (buffer, BUFSIZ, "%s (%03.3f, %03.3f) -- (%03.3f, %03.3f) -- (%03.3f, %03.3f) -- (%03.3f, %03.3f) -- cycle;\n", draw_buffer,
               coords[0][0], coords[0][1],
               coords[1][0], coords[1][1],
-              coords[2][0], coords[2][1],
-              coords[3][0], coords[3][1]
+              coords[3][0], coords[3][1],
+              coords[2][0], coords[2][1]
               ); 
   }
   else{

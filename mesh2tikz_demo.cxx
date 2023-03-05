@@ -5,6 +5,8 @@
 #include <t8_forest.h>          /* forest definition and basic interface. */
 #include <forest_2_tikz/forest_to_tikz.hxx>
 #include <t8_schemes/t8_default/t8_default_cxx.hxx>
+#include <t8_cmesh_vtk.h>
+#include <t8_geometry/t8_geometry_implementations/t8_geometry_linear.h>
 
 /*
  * This file is demonstration on how to use mesh2tikz. 
@@ -14,6 +16,38 @@
  * look at the vtu-files "tikz_compare" in Paraview. 
  */
 
+
+static t8_cmesh_t
+construct_cmesh(sc_MPI_Comm comm){
+  t8_cmesh_t cmesh;
+  double quad_vertices[12] = {0, 0, 1,
+                              1, 0, 1,
+                              0, 1, 1,
+                              1, 1, 1};
+  double  tri_one_vertices[9] = {1, 1, 1,
+                                 1, 0, 1,
+                                 1, 1, 0};
+  double  tri_two_vertices[9] = {1, 1, 1,
+                                 0, 1, 1,
+                                 1, 1, 0};  
+  double  tri_three_vertices[9] = {0, 1, 1,
+                                 0, 1, 0,
+                                 1, 1, 0}; 
+  t8_geometry_c      *linear_geom = t8_geometry_linear_new (3);                         
+  t8_cmesh_init(&cmesh);
+  t8_cmesh_set_tree_class(cmesh,0, T8_ECLASS_QUAD);
+  t8_cmesh_set_tree_class(cmesh, 1, T8_ECLASS_TRIANGLE);
+  t8_cmesh_set_tree_class(cmesh, 2, T8_ECLASS_TRIANGLE);
+  t8_cmesh_set_tree_class(cmesh, 3, T8_ECLASS_TRIANGLE);
+  t8_cmesh_register_geometry(cmesh, linear_geom);
+  t8_cmesh_set_tree_vertices(cmesh, 0, quad_vertices, 4);
+  t8_cmesh_set_tree_vertices(cmesh, 1, tri_one_vertices, 3);
+  t8_cmesh_set_tree_vertices(cmesh, 2, tri_two_vertices, 3);
+  t8_cmesh_set_tree_vertices(cmesh, 3, tri_three_vertices, 3);
+
+  t8_cmesh_commit(cmesh, comm);
+  return cmesh;
+}
 
 int
 main (int argc, char **argv)
@@ -30,13 +64,13 @@ main (int argc, char **argv)
 
   const double        screen_width = 30.0;
   const double        screen_height = 30.0;
-  const double        cam[3] = { 0.5, 0.5, 2.0 };
-  const double        focus[3] = { 0.5, 0.5, 1.0 };
-  const double        up[3] = { 0.0, 1.0, 0.0 };
+  const double        cam[3] = { 1.5, 1.5, 1.5 };
+  const double        focus[3] = { 1.5, 0.5, 0.5 };
+  const double        up[3] = { 0.0, 0.0, 1.0 };
 
-  const double        view_width = 2.0;
-  const double        view_height = 2.0;
-  const double        far = 2.0;
+  const double        view_width = 3.0;
+  const double        view_height = 3.0;
+  const double        far = 3.0;
   const int           write_sfc = 1;
   const int           color_mpi = 1;
   int                 **mpi_colors = (int **)malloc(3*sizeof(int *));
@@ -52,8 +86,8 @@ main (int argc, char **argv)
       mpi_colors[i][j] = (i == j) ? 255: 0;
     }
   }
-  cmesh = t8_cmesh_new_hypercube (T8_ECLASS_TRIANGLE, comm, 0, 0, 0);
 
+  cmesh = construct_cmesh(comm);
   forest =
     t8_forest_new_uniform (cmesh, t8_scheme_new_default_cxx (), level, 0,
                            comm);
